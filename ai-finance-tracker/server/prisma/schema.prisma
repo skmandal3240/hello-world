@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  accounts      Account[]
+  transactions  Transaction[]
+  budgets       Budget[]
+  aiInsights    AiInsight[]
+  chatMessages  ChatMessage[]
+  plaidItems    PlaidItem[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  @@map("refresh_tokens")
+}
+
+model Account {
+  id             String      @id @default(cuid())
+  userId         String
+  name           String
+  type           AccountType
+  balance        Decimal     @db.Decimal(12, 2)
+  currency       String      @default("USD")
+  isPlaid        Boolean     @default(false)
+  plaidItemId    String?
+  plaidAccountId String?     @unique
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidItem    PlaidItem?    @relation(fields: [plaidItemId], references: [id])
+  transactions Transaction[]
+
+  @@map("accounts")
+}
+
+model PlaidItem {
+  id              String    @id @default(cuid())
+  userId          String
+  accessToken     String
+  itemId          String    @unique
+  institutionName String
+  cursor          String?
+  lastSync        DateTime?
+  createdAt       DateTime  @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts Account[]
+
+  @@map("plaid_items")
+}
+
+model Category {
+  id        String  @id @default(cuid())
+  name      String
+  icon      String
+  color     String
+  isDefault Boolean @default(false)
+  userId    String?
+
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  accountId   String
+  categoryId  String?
+  amount      Decimal  @db.Decimal(12, 2)
+  description String
+  notes       String?
+  date        DateTime
+  type        TxType
+  isRecurring Boolean  @default(false)
+  plaidTxId   String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("transactions")
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String
+  amount     Decimal  @db.Decimal(12, 2)
+  month      Int
+  year       Int
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([userId, categoryId, month, year])
+  @@map("budgets")
+}
+
+model AiInsight {
+  id        String      @id @default(cuid())
+  userId    String
+  type      InsightType
+  title     String
+  body      String
+  data      Json?
+  month     Int?
+  year      Int?
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_insights")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  CREDIT
+  INVESTMENT
+  LOAN
+  CASH
+}
+
+enum TxType {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+enum InsightType {
+  WEEKLY_SUMMARY
+  SAVINGS_TIP
+  ANOMALY
+  FORECAST
+}
