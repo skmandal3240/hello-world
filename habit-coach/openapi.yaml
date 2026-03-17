@@ -1,0 +1,794 @@
+openapi: 3.1.0
+info:
+  title: Habit Coach API
+  version: 1.0.0
+  description: |
+    AI-powered habit tracking and accountability coaching platform.
+    Real-time partner matching, Socket.io messaging, and Claude AI coaching.
+  contact:
+    name: Habit Coach
+servers:
+  - url: http://localhost:3002
+    description: Development server
+  - url: https://api.habitcoach.app
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ─── Enums ───────────────────────────────────────────────────────────────
+    HabitCategory:
+      type: string
+      enum: [HEALTH, FITNESS, LEARNING, PRODUCTIVITY, MINDFULNESS, NUTRITION, SOCIAL, CREATIVITY, FINANCE, OTHER]
+
+    HabitFrequency:
+      type: string
+      enum: [DAILY, WEEKLY]
+
+    NotificationType:
+      type: string
+      enum: [AI_NUDGE, AI_REENGAGEMENT, AI_WEEKLY_SUMMARY, PARTNER_ENCOURAGEMENT, PARTNER_MATCHED, SYSTEM]
+
+    # ─── Core Models ─────────────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:          { type: string }
+        email:       { type: string, format: email }
+        displayName: { type: string }
+        bio:         { type: string, nullable: true }
+        timezone:    { type: string, default: UTC }
+        avatarColor: { type: string }
+        matchingEnabled: { type: boolean }
+        preferredCategory: { $ref: '#/components/schemas/HabitCategory', nullable: true }
+        createdAt:   { type: string, format: date-time }
+
+    Habit:
+      type: object
+      properties:
+        id:          { type: string }
+        userId:      { type: string }
+        name:        { type: string }
+        description: { type: string, nullable: true }
+        frequency:   { $ref: '#/components/schemas/HabitFrequency' }
+        category:    { $ref: '#/components/schemas/HabitCategory' }
+        targetDays:  { type: integer, minimum: 1, maximum: 7 }
+        archived:    { type: boolean }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+
+    CheckIn:
+      type: object
+      properties:
+        id:        { type: string }
+        habitId:   { type: string }
+        userId:    { type: string }
+        date:      { type: string, format: date }
+        completed: { type: boolean }
+        note:      { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      properties:
+        id:        { type: string }
+        userId:    { type: string }
+        type:      { $ref: '#/components/schemas/NotificationType' }
+        content:   { type: string }
+        read:      { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    Message:
+      type: object
+      properties:
+        id:        { type: string }
+        senderId:  { type: string }
+        content:   { type: string }
+        createdAt: { type: string, format: date-time }
+
+    PartnerStatus:
+      type: object
+      properties:
+        matched:    { type: boolean }
+        optedIn:    { type: boolean }
+        partner:
+          nullable: true
+          type: object
+          properties:
+            displayName:  { type: string }
+            avatarColor:  { type: string }
+            matchedSince: { type: string, format: date-time }
+
+    # ─── Request Bodies ───────────────────────────────────────────────────────
+    SignupRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email:       { type: string, format: email }
+        password:    { type: string, minLength: 8 }
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:    { type: string, format: email }
+        password: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:       { type: string, minLength: 1, maxLength: 50 }
+        bio:               { type: string, maxLength: 300 }
+        timezone:          { type: string }
+        avatarColor:       { type: string }
+        matchingEnabled:   { type: boolean }
+        preferredCategory: { $ref: '#/components/schemas/HabitCategory' }
+
+    CreateHabitRequest:
+      type: object
+      required: [name, frequency, category]
+      properties:
+        name:        { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        frequency:   { $ref: '#/components/schemas/HabitFrequency' }
+        category:    { $ref: '#/components/schemas/HabitCategory' }
+        targetDays:  { type: integer, minimum: 1, maximum: 7, default: 1 }
+
+    UpdateHabitRequest:
+      type: object
+      properties:
+        name:        { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        frequency:   { $ref: '#/components/schemas/HabitFrequency' }
+        category:    { $ref: '#/components/schemas/HabitCategory' }
+        targetDays:  { type: integer, minimum: 1, maximum: 7 }
+
+    CreateCheckInRequest:
+      type: object
+      required: [habitId, completed]
+      properties:
+        habitId:   { type: string }
+        completed: { type: boolean }
+        note:      { type: string, maxLength: 500 }
+        date:      { type: string, format: date, description: Defaults to today }
+
+    UpdateCheckInRequest:
+      type: object
+      properties:
+        completed: { type: boolean }
+        note:      { type: string, maxLength: 500 }
+
+    PartnerOptInRequest:
+      type: object
+      properties:
+        category: { $ref: '#/components/schemas/HabitCategory' }
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 500 }
+
+    AIChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 1000 }
+
+    # ─── Response Wrappers ────────────────────────────────────────────────────
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:  { type: string }
+        refreshToken: { type: string }
+        user:         { $ref: '#/components/schemas/User' }
+
+    Error:
+      type: object
+      properties:
+        error:   { type: string }
+        details: { type: array, items: { type: object } }
+
+paths:
+
+  # ═══════════════════════════════════════════════════════════
+  # AUTH
+  # ═══════════════════════════════════════════════════════════
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupRequest' }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (invalidate refresh token)
+      responses:
+        '200':
+          description: Logged out successfully
+        '401':
+          description: Unauthorized
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthorized
+    patch:
+      tags: [Auth]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ═══════════════════════════════════════════════════════════
+  # HABITS
+  # ═══════════════════════════════════════════════════════════
+  /habits:
+    get:
+      tags: [Habits]
+      summary: Get all habits for current user
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: '#/components/schemas/HabitCategory' }
+        - name: archived
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: List of habits
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Habit' }
+    post:
+      tags: [Habits]
+      summary: Create a new habit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateHabitRequest' }
+      responses:
+        '201':
+          description: Habit created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /habits/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Habits]
+      summary: Get a specific habit
+      responses:
+        '200':
+          description: Habit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+        '404':
+          description: Habit not found
+    patch:
+      tags: [Habits]
+      summary: Update a habit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateHabitRequest' }
+      responses:
+        '200':
+          description: Updated habit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+        '404':
+          description: Habit not found
+    delete:
+      tags: [Habits]
+      summary: Delete a habit
+      responses:
+        '204':
+          description: Habit deleted
+        '404':
+          description: Habit not found
+
+  /habits/{id}/archive:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Habits]
+      summary: Archive a habit
+      responses:
+        '200':
+          description: Habit archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habit' }
+        '404':
+          description: Habit not found
+
+  # ═══════════════════════════════════════════════════════════
+  # CHECK-INS
+  # ═══════════════════════════════════════════════════════════
+  /check-ins/today:
+    get:
+      tags: [Check-ins]
+      summary: Get today's check-in status for all habits
+      responses:
+        '200':
+          description: Today's status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:     { type: string, format: date }
+                  checkIns: { type: array, items: { $ref: '#/components/schemas/CheckIn' } }
+                  summary:
+                    type: object
+                    properties:
+                      total:     { type: integer }
+                      completed: { type: integer }
+                      rate:      { type: number, format: float }
+
+  /check-ins/history:
+    get:
+      tags: [Check-ins]
+      summary: Get historical check-ins
+      parameters:
+        - name: habitId
+          in: query
+          schema: { type: string }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 30, maximum: 365 }
+      responses:
+        '200':
+          description: Check-in history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CheckIn' }
+
+  /check-ins:
+    post:
+      tags: [Check-ins]
+      summary: Log a check-in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCheckInRequest' }
+      responses:
+        '201':
+          description: Check-in recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckIn' }
+        '400':
+          description: Validation error or duplicate check-in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /check-ins/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Check-ins]
+      summary: Update a check-in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCheckInRequest' }
+      responses:
+        '200':
+          description: Updated check-in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckIn' }
+        '404':
+          description: Check-in not found
+
+  # ═══════════════════════════════════════════════════════════
+  # PARTNER
+  # ═══════════════════════════════════════════════════════════
+  /partner/status:
+    get:
+      tags: [Partner]
+      summary: Get current partner matching status
+      responses:
+        '200':
+          description: Partner status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PartnerStatus' }
+
+  /partner/opt-in:
+    post:
+      tags: [Partner]
+      summary: Opt into anonymous partner matching
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PartnerOptInRequest' }
+      responses:
+        '200':
+          description: Opted in — may be immediately matched or queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:  { type: string, enum: [queued, matched] }
+                  partner: { $ref: '#/components/schemas/PartnerStatus/properties/partner' }
+
+  /partner/opt-out:
+    post:
+      tags: [Partner]
+      summary: Opt out of partner matching
+      responses:
+        '200':
+          description: Opted out and unmatched
+
+  /partner/habits:
+    get:
+      tags: [Partner]
+      summary: Get partner's visible habits (anonymized)
+      responses:
+        '200':
+          description: Partner habits
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Habit' }
+        '404':
+          description: No partner matched
+
+  /partner/messages:
+    get:
+      tags: [Partner]
+      summary: Get messages with current partner
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: before
+          in: query
+          schema: { type: string, description: Cursor for pagination }
+      responses:
+        '200':
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Message' }
+        '404':
+          description: No partner matched
+    post:
+      tags: [Partner]
+      summary: Send a message to partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '404':
+          description: No partner matched
+        '400':
+          description: Validation error
+
+  # ═══════════════════════════════════════════════════════════
+  # AI
+  # ═══════════════════════════════════════════════════════════
+  /ai/nudge:
+    get:
+      tags: [AI]
+      summary: Get AI-generated personalized nudge
+      description: |
+        Returns a motivational nudge based on user's habit history and streak.
+        Cached in Notification table — generates new nudge once per day.
+      responses:
+        '200':
+          description: AI nudge
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nudge:     { type: string }
+                  cached:    { type: boolean }
+                  generatedAt: { type: string, format: date-time }
+
+  /ai/weekly-summary:
+    get:
+      tags: [AI]
+      summary: Get AI-generated weekly progress summary
+      description: Generated every Sunday. Returns cached version if already generated this week.
+      responses:
+        '200':
+          description: Weekly summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:     { type: string }
+                  weekStart:   { type: string, format: date }
+                  weekEnd:     { type: string, format: date }
+                  stats:
+                    type: object
+                    properties:
+                      totalCheckIns:     { type: integer }
+                      completedCheckIns: { type: integer }
+                      completionRate:    { type: number }
+                      longestStreak:     { type: integer }
+
+  /ai/chat:
+    post:
+      tags: [AI]
+      summary: Chat with AI habit coach
+      description: |
+        Multi-turn conversational coaching powered by Claude.
+        Responds with coaching advice based on user's habits and progress.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AIChatRequest' }
+      responses:
+        '200':
+          description: AI response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply: { type: string }
+        '400':
+          description: Message too long or invalid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Rate limit exceeded
+
+  # ═══════════════════════════════════════════════════════════
+  # NOTIFICATIONS
+  # ═══════════════════════════════════════════════════════════
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Get all notifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/NotificationType' }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get count of unread notifications
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+
+  /notifications/{id}/read:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      responses:
+        '200':
+          description: Notification marked read
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '404':
+          description: Notification not found
+
+  /notifications/read-all:
+    patch:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        '200':
+          description: All notifications marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+
+  /notifications/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      responses:
+        '204':
+          description: Notification deleted
+        '404':
+          description: Notification not found
+
+tags:
+  - name: Auth
+    description: Authentication and user profile management
+  - name: Habits
+    description: Habit CRUD and archiving
+  - name: Check-ins
+    description: Daily habit check-in logging and history
+  - name: Partner
+    description: Anonymous accountability partner matching and messaging
+  - name: AI
+    description: AI coaching powered by Claude (nudges, summaries, chat)
+  - name: Notifications
+    description: In-app notification management
