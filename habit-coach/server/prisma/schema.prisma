@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum HabitFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum HabitCategory {
+  HEALTH
+  FITNESS
+  LEARNING
+  PRODUCTIVITY
+  MINDFULNESS
+  NUTRITION
+  SOCIAL
+  CREATIVITY
+  FINANCE
+  OTHER
+}
+
+enum NotificationType {
+  AI_NUDGE
+  AI_REENGAGEMENT
+  AI_WEEKLY_SUMMARY
+  PARTNER_ENCOURAGEMENT
+  PARTNER_MATCHED
+  SYSTEM
+}
+
+enum MatchStatus {
+  PENDING
+  MATCHED
+  UNMATCHED
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  passwordHash     String
+  displayName      String
+  avatarColor      String        @default("#6366f1")
+  bio              String?
+  timezone         String        @default("UTC")
+  matchingEnabled  Boolean       @default(false)
+  preferredCategory HabitCategory?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  habits            Habit[]
+  checkIns          CheckIn[]
+  notifications     Notification[]
+  refreshTokens     RefreshToken[]
+  initiatedPairings PartnerPair[]  @relation("User1")
+  receivedPairings  PartnerPair[]  @relation("User2")
+  sentMessages      PartnerMessage[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Habit {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  frequency        HabitFrequency @default(DAILY)
+  category         HabitCategory  @default(OTHER)
+  targetDays       Int            @default(30)
+  isArchived       Boolean        @default(false)
+  currentStreak    Int            @default(0)
+  longestStreak    Int            @default(0)
+  totalCompletions Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  checkIns CheckIn[]
+
+  @@map("habits")
+}
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  completed Boolean
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([habitId, date])
+  @@index([userId, date])
+  @@map("check_ins")
+}
+
+model PartnerPair {
+  id          String      @id @default(cuid())
+  user1Id     String
+  user1       User        @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id     String
+  user2       User        @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  category    HabitCategory
+  status      MatchStatus @default(MATCHED)
+  matchedAt   DateTime    @default(now())
+  unmatchedAt DateTime?
+
+  messages PartnerMessage[]
+
+  @@unique([user1Id, user2Id])
+  @@map("partner_pairs")
+}
+
+model PartnerMessage {
+  id        String      @id @default(cuid())
+  pairId    String
+  pair      PartnerPair @relation(fields: [pairId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content   String
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
+  @@index([pairId, createdAt])
+  @@map("partner_messages")
+}
+
+model MatchingQueue {
+  id       String        @id @default(cuid())
+  userId   String        @unique
+  category HabitCategory
+  joinedAt DateTime      @default(now())
+
+  @@map("matching_queue")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
