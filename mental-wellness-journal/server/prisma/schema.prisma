@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExerciseCategory {
+  THOUGHT_RECORD
+  GRATITUDE
+  BREATHING
+  GROUNDING
+  COGNITIVE_RESTRUCTURING
+  BEHAVIORAL_ACTIVATION
+}
+
+enum NotificationType {
+  AI_DAILY_PROMPT
+  AI_WEEKLY_SUMMARY
+  STREAK_MILESTONE
+  SYSTEM
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens       RefreshToken[]
+  entries             JournalEntry[]
+  moodLogs            MoodLog[]
+  streak              JournalingStreak?
+  exerciseCompletions ExerciseCompletion[]
+  notifications       Notification[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model JournalEntry {
+  id                      String    @id @default(cuid())
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                   String?
+  content                 String
+  moodScore               Int       // 1-10
+  tags                    String[]
+  aiReflection            String?
+  aiReflectionGeneratedAt DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+model MoodLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score     Int      // 1-10
+  note      String?
+  loggedAt  DateTime @default(now())
+
+  @@unique([userId, loggedAt])
+  @@index([userId, loggedAt])
+}
+
+model JournalingStreak {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastEntryDate DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+model CbtExercise {
+  id              String           @id @default(cuid())
+  category        ExerciseCategory
+  title           String
+  description     String
+  instructions    String
+  durationMinutes Int
+  createdAt       DateTime         @default(now())
+
+  completions ExerciseCompletion[]
+}
+
+model ExerciseCompletion {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    CbtExercise @relation(fields: [exerciseId], references: [id])
+  completedAt DateTime    @default(now())
+  notes       String?
+
+  @@index([userId, completedAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
