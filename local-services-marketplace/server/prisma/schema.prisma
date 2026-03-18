@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  PROVIDER
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         UserRole @default(CUSTOMER)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  providerProfile ProviderProfile?
+  jobRequests   JobRequest[]
+  reviewsGiven  Review[]         @relation("ReviewAuthor")
+  messages      Message[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  icon        String
+  description String
+  createdAt   DateTime  @default(now())
+
+  services    Service[]
+}
+
+model ProviderProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio         String
+  location    String
+  zipCode     String
+  hourlyRate  Float
+  yearsExp    Int      @default(0)
+  isVerified  Boolean  @default(false)
+  isAvailable Boolean  @default(true)
+  rating      Float    @default(0)
+  totalReviews Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  services    Service[]
+  bookings    Booking[]
+  reviewsReceived Review[] @relation("ReviewTarget")
+  messages    Message[]
+}
+
+model Service {
+  id          String          @id @default(cuid())
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  title       String
+  description String
+  price       Float
+  priceType   String          @default("hourly") // hourly | fixed
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  jobRequests JobRequest[]
+}
+
+model JobRequest {
+  id          String        @id @default(cuid())
+  customerId  String
+  customer    User          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service       @relation(fields: [serviceId], references: [id])
+  title       String
+  description String
+  location    String
+  zipCode     String
+  budget      Float?
+  scheduledAt DateTime?
+  status      BookingStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  booking     Booking?
+  messages    Message[]
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  jobRequestId String       @unique
+  jobRequest  JobRequest    @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  agreedPrice Float
+  status      BookingStatus @default(ACCEPTED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  review      Review?
+}
+
+model Review {
+  id         String          @id @default(cuid())
+  bookingId  String          @unique
+  booking    Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User            @relation("ReviewAuthor", fields: [authorId], references: [id])
+  providerId String
+  provider   ProviderProfile @relation("ReviewTarget", fields: [providerId], references: [id])
+  rating     Int             // 1-5
+  comment    String
+  createdAt  DateTime        @default(now())
+}
+
+model Message {
+  id           String          @id @default(cuid())
+  jobRequestId String
+  jobRequest   JobRequest      @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
+  senderId     String
+  sender       User            @relation(fields: [senderId], references: [id])
+  providerId   String
+  provider     ProviderProfile @relation(fields: [providerId], references: [id])
+  content      String
+  createdAt    DateTime        @default(now())
+}
