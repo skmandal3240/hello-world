@@ -28,7 +28,10 @@ Node:     v20+ required   |   Python: 3.11+
 hello-world/
 ├── ai-finance-tracker/     Express:3001 | React+Vite:5174 | Plaid + Claude AI
 │   ├── client/             React 18 + Router + Recharts + Plaid Link + Papaparse
-│   └── server/             Express + Prisma + JWT + Zod + Pino + Helmet
+│
+├── smart-recipe-planner/   Express:3003 | React+Vite:5176 | Pantry + AI Recipes + Meal Plan
+│   ├── client/             React 18 + Router + Tailwind (emerald) + Axios
+│   └── server/             Express + Prisma + JWT + Zod + Pino + Helmet + @anthropic-ai/sdk
 │
 ├── habit-coach/            Express:3002 | React+Vite:5175 | Claude AI + Socket.io + node-cron
 │   ├── client/             React 18 + Router + Socket.io-client + Axios

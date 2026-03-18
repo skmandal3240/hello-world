@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DietaryPreference {
+  NONE
+  VEGETARIAN
+  VEGAN
+  GLUTEN_FREE
+  DAIRY_FREE
+  KETO
+  PALEO
+  LOW_CARB
+  HALAL
+  KOSHER
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum IngredientCategory {
+  PRODUCE
+  PROTEIN
+  DAIRY
+  GRAINS
+  PANTRY
+  SPICES
+  FROZEN
+  BEVERAGES
+  OTHER
+}
+
+model User {
+  id                  String              @id @default(cuid())
+  email               String              @unique
+  passwordHash        String
+  displayName         String
+  dietaryPreferences  DietaryPreference[] @default([NONE])
+  servings            Int                 @default(2)
+  weeklyBudget        Float?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  refreshTokens RefreshToken[]
+  pantryItems   PantryItem[]
+  savedRecipes  SavedRecipe[]
+  mealPlans     MealPlan[]
+  shoppingLists ShoppingList[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model PantryItem {
+  id         String             @id @default(cuid())
+  userId     String
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  quantity   Float
+  unit       String
+  category   IngredientCategory @default(OTHER)
+  expiryDate DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([userId])
+  @@map("pantry_items")
+}
+
+model Recipe {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String
+  ingredients        Json
+  instructions       Json
+  prepTimeMinutes    Int
+  cookTimeMinutes    Int
+  servings           Int
+  cuisine            String?
+  tags               String[]
+  nutritionPerServing Json?
+  aiGenerated        Boolean  @default(false)
+  imageUrl           String?
+  createdAt          DateTime @default(now())
+
+  savedBy         SavedRecipe[]
+  mealPlanEntries MealPlanEntry[]
+
+  @@index([aiGenerated])
+  @@map("recipes")
+}
+
+model SavedRecipe {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeId String
+  recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  rating   Int?
+  notes    String?
+  savedAt  DateTime @default(now())
+
+  @@unique([userId, recipeId])
+  @@index([userId])
+  @@map("saved_recipes")
+}
+
+model MealPlan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries MealPlanEntry[]
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@map("meal_plans")
+}
+
+model MealPlanEntry {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  recipeId   String?
+  recipe     Recipe?  @relation(fields: [recipeId], references: [id])
+  dayOfWeek  Int
+  mealType   MealType
+  customName String?
+
+  @@unique([mealPlanId, dayOfWeek, mealType])
+  @@map("meal_plan_entries")
+}
+
+model ShoppingList {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart DateTime @db.Date
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ShoppingListItem[]
+
+  @@index([userId])
+  @@map("shopping_lists")
+}
+
+model ShoppingListItem {
+  id             String             @id @default(cuid())
+  shoppingListId String
+  shoppingList   ShoppingList       @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  name           String
+  quantity       Float
+  unit           String
+  category       IngredientCategory @default(OTHER)
+  checked        Boolean            @default(false)
+  estimatedPrice Float?
+
+  @@map("shopping_list_items")
+}
