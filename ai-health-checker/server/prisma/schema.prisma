@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TriageLevel {
+  EMERGENT
+  URGENT
+  SEE_DOCTOR
+  MONITOR
+  SELF_CARE
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum NotificationType {
+  SYSTEM
+  HEALTH_TIP
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions      SymptomSession[]
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model SymptomSession {
+  id                  String        @id @default(cuid())
+  userId              String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title               String        @default("New Consultation")
+  triageLevel         TriageLevel?
+  status              SessionStatus @default(ACTIVE)
+  doctorSummary       String?
+  summaryGeneratedAt  DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  messages SessionMessage[]
+
+  @@index([userId, createdAt])
+  @@map("symptom_sessions")
+}
+
+model SessionMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   SymptomSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+  @@map("session_messages")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
