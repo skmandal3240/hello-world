@@ -149,6 +149,18 @@ PORT=3001             CLIENT_URL="http://localhost:5174"
 | SuperClaude | v4.2.0 | `/sc/implement` `/sc/design` `/sc/analyze` `/sc/brainstorm` `/sc/troubleshoot` `/sc/research` `/sc/improve` `/sc/git` `/sc/build` `/sc/test` — 31 total |
 | Everything Claude Code | v1.8.0 | 25 agents via Agent tool + `/code-review` `/tdd` `/security-scan` `/build-fix` `/e2e` `/plan` `/refactor-clean` `/docs` `/devfleet` — 58 total |
 | Marketing Skills | v1.0 | `/marketing/copywriting` `/marketing/launch-strategy` `/marketing/content-strategy` `/marketing/seo-audit` `/marketing/email-sequence` `/marketing/pricing-strategy` — 33 total |
+| claude-mem | v10.6.0 | `/mem-search` `/do` `/make-plan` `/smart-explore` — Persistent memory, cross-session context injection, web viewer at localhost:37777 |
+
+### MCP Servers (configured in ~/.claude/settings.json)
+
+| Server | Package | What it provides |
+|--------|---------|-----------------|
+| `filesystem` | `@modelcontextprotocol/server-filesystem` v2026.1.14 | Secure file read/write with access controls on `/home/user` and `/root` |
+| `memory` | `@modelcontextprotocol/server-memory` v2026.1.26 | Knowledge graph persistent memory — entities, relations, observations |
+| `sequential-thinking` | `@modelcontextprotocol/server-sequential-thinking` v2025.12.18 | Dynamic multi-step reasoning via thought sequences |
+| `github` | `github-mcp-server` v1.8.7 | 29 Git operations + 11 workflow combos. Needs `GITHUB_TOKEN` env var |
+| `microsoft-learn` | Remote HTTP (no install) | Microsoft Learn docs — no auth needed. `https://learn.microsoft.com/api/mcp` |
+| `claude-mem` | `claude-mem` v10.6.0 | Session capture → compression → context injection across sessions |
 
 ### Installed CLI + Python Tools
 
@@ -215,6 +227,22 @@ octo search repos --q "topic:react stars:>1000"
 
 ---
 
+**claude-mem v10.6.0** — Persistent memory across Claude Code sessions
+```bash
+# Skills (use via slash commands in Claude Code):
+/mem-search "query"    # Search compressed session memory
+/do "task"             # Execute with memory-aware context
+/make-plan             # Create plan with past context
+/smart-explore         # Explore codebase with remembered context
+
+# Web viewer: http://localhost:37777  (starts automatically)
+# Memory stored at: ~/.claude-mem/
+# Private tags: wrap text in <private>...</private> to exclude from memory
+```
+**When to use:** When you need Claude to remember decisions, patterns, and context from previous sessions. Auto-injects relevant history into new sessions.
+
+---
+
 **AionUi** — Desktop AI Cowork Platform (download from github.com/iOfficeAI/AionUi)
 ```
 Platform:     macOS / Windows / Linux
@@ -248,9 +276,13 @@ Features:
 ║  Scrape static site        →  Scrapling Fetcher                  ║
 ║  Scrape JS/SPA site        →  Scrapling PlayWrightFetcher         ║
 ║  Feed URL content to AI    →  Firecrawl → markdown → Claude      ║
-║  GitHub automation         →  octo CLI                           ║
+║  GitHub automation         →  octo CLI / github MCP server       ║
 ║  AI agent with memory      →  hermes (persistent ~/.hermes/)     ║
 ║  Multi-agent desktop tasks →  AionUi                             ║
+║  Cross-session memory      →  claude-mem (/mem-search)           ║
+║  MS docs lookup            →  microsoft-learn MCP server         ║
+║  Knowledge graph memory    →  memory MCP server                  ║
+║  Multi-step reasoning      →  sequential-thinking MCP server     ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Build fails               →  build-error-resolver agent         ║
 ║  After writing any code    →  code-reviewer agent (MANDATORY)    ║
@@ -782,5 +814,6 @@ Jobs are ordered as a dependency graph — not independent crons:
 
 ---
 
-*Last updated: 2026-03-17 | Branch: claude/rate-app-ideas-gUJLL*
-*Tools installed: firecrawl-py v4.19.0, scrapling v0.4.2, hermes v0.3.0, octo-cli v0.23.0*
+*Last updated: 2026-03-18 | Branch: claude/rate-app-ideas-gUJLL*
+*Tools installed: firecrawl-py v4.19.0, scrapling v0.4.2, hermes v0.3.0, octo-cli v0.23.0, claude-mem v10.6.0*
+*MCP servers: filesystem v2026.1.14, memory v2026.1.26, sequential-thinking v2025.12.18, github-mcp-server v1.8.7, microsoft-learn (remote)*
